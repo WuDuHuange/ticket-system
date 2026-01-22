@@ -28,6 +28,9 @@
                 <el-dropdown-item command="assigned" :disabled="ticket.status === 'assigned'">
                   {{ $t('tickets.assignToMe') }}
                 </el-dropdown-item>
+                <el-dropdown-item command="assign_other" v-if="isAdmin || isManager">
+                  {{ $t('tickets.assignTicket') }}
+                </el-dropdown-item>
                 <el-dropdown-item command="in_progress" :disabled="ticket.status === 'in_progress'">
                   {{ $t('tickets.statusInProgress') }}
                 </el-dropdown-item>
@@ -45,6 +48,35 @@
           </el-dropdown>
         </div>
       </div>
+
+      <!-- Assign Dialog for Admins/Managers -->
+      <el-dialog
+        :title="t('tickets.assignTicket')"
+        v-model="assignDialogVisible"
+        width="480px"
+        :before-close="() => { assignDialogVisible = false }"
+      >
+        <el-form label-position="top">
+          <el-form-item :label="t('tickets.selectAssignee')">
+            <el-select v-model="selectedAssignee" placeholder="Select user" filterable clearable>
+              <el-option v-for="u in assignees" :key="u.id" :label="u.name || u.email" :value="u.id" />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item :label="t('tickets.selectTeam')">
+            <el-select v-model="selectedTeam" placeholder="Select team" filterable clearable>
+              <el-option v-for="tm in teams" :key="tm.id" :label="tm.name" :value="tm.id" />
+            </el-select>
+          </el-form-item>
+        </el-form>
+
+        <template #footer>
+          <div style="text-align: right">
+            <el-button @click="assignDialogVisible = false">{{ t('common.cancel') }}</el-button>
+            <el-button type="primary" :loading="assigning" @click="assignToSelected">{{ t('common.confirm') }}</el-button>
+          </div>
+        </template>
+      </el-dialog>
 
       <el-row :gutter="24">
         <!-- Main Content -->
@@ -242,6 +274,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useTicketStore, useUserStore, useUIStore } from '@/stores'
+import { userApi, teamApi } from '@/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ArrowLeft,
@@ -270,6 +303,16 @@ const uiStore = useUIStore()
 const loading = computed(() => ticketStore.loading)
 const ticket = computed(() => ticketStore.currentTicket)
 const isStaff = computed(() => userStore.isStaff)
+const isAdmin = computed(() => userStore.isAdmin)
+const isManager = computed(() => userStore.isManager)
+
+// Assign dialog state
+const assignDialogVisible = ref(false)
+const assignees = ref<any[]>([])
+const teams = ref<any[]>([])
+const selectedAssignee = ref<string | null>(null)
+const selectedTeam = ref<string | null>(null)
+const assigning = ref(false)
 
 const newComment = ref('')
 const isInternalComment = ref(false)
@@ -324,7 +367,19 @@ function getInitials(name: string): string {
 
 async function handleStatusChange(status: string) {
   if (!ticket.value) return
-  
+
+  // Open assign dialog for admins/managers
+  if (status === 'assign_other') {
+    await openAssignDialog()
+    return
+  }
+
+  // Assign to self: call assign API instead of status endpoint
+  if (status === 'assigned') {
+    await assignToSelf()
+    return
+  }
+
   try {
     const { value: comment } = await ElMessageBox.prompt(
       t('tickets.statusChangeComment'),
@@ -335,9 +390,9 @@ async function handleStatusChange(status: string) {
         inputType: 'textarea'
       }
     )
-    
+
     const result = await ticketStore.updateTicketStatus(ticket.value.id, status, comment)
-    
+
     if (result.success) {
       ElMessage.success(t('tickets.statusUpdated'))
     } else {
@@ -345,6 +400,92 @@ async function handleStatusChange(status: string) {
     }
   } catch {
     // User cancelled
+  }
+}
+
+async function openAssignDialog() {
+  assignDialogVisible.value = true
+  await loadAssignees()
+  await loadTeams()
+}
+
+async function loadAssignees() {
+  try {
+    const resp = await userApi.getUsers({ page: 1, pageSize: 200, role: 'support_staff' })
+    if (resp.code === 200 && resp.data) {
+      assignees.value = (resp.data as any).items || []
+    }
+  } catch (e) {
+    console.error('Load assignees error', e)
+  }
+}
+
+async function loadTeams() {
+  try {
+    const resp = await teamApi.getTeams()
+    if (resp.code === 200 && resp.data) {
+      teams.value = resp.data as any[]
+    }
+  } catch (e) {
+    console.error('Load teams error', e)
+  }
+}
+
+async function assignToSelf() {
+  if (!ticket.value) return
+  const currentUserId = userStore.user?.id
+  if (!currentUserId) {
+    ElMessage.error(t('errors.notAuthenticated'))
+    return
+  }
+
+  assigning.value = true
+  try {
+    const result = await ticketStore.assignTicket(ticket.value.id, String(currentUserId))
+    if (result.success) {
+      ElMessage.success(t('tickets.ticketAssigned'))
+      await ticketStore.fetchTicketById(ticket.value.id)
+    } else {
+      ElMessage.error(result.message || t('errors.operationFailed'))
+    }
+  } finally {
+    assigning.value = false
+  }
+}
+
+async function assignToSelected() {
+  if (!ticket.value) return
+  assigning.value = true
+  try {
+    if (selectedTeam.value) {
+      const res = await ticketStore.assignTicketToTeam(ticket.value.id, selectedTeam.value)
+      if (res.success) {
+        ElMessage.success(t('tickets.ticketAssigned'))
+        assignDialogVisible.value = false
+        await ticketStore.fetchTicketById(ticket.value.id)
+        return
+      } else {
+        ElMessage.error(res.message || t('errors.operationFailed'))
+        return
+      }
+    }
+
+    if (selectedAssignee.value) {
+      const res = await ticketStore.assignTicket(ticket.value.id, selectedAssignee.value)
+      if (res.success) {
+        ElMessage.success(t('tickets.ticketAssigned'))
+        assignDialogVisible.value = false
+        await ticketStore.fetchTicketById(ticket.value.id)
+        return
+      } else {
+        ElMessage.error(res.message || t('errors.operationFailed'))
+        return
+      }
+    }
+
+    ElMessage.warning(t('tickets.selectAssigneeOrTeam'))
+  } finally {
+    assigning.value = false
   }
 }
 

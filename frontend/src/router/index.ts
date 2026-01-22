@@ -11,6 +11,7 @@ const TicketListView = () => import('@/views/tickets/TicketListView.vue')
 const TicketDetailView = () => import('@/views/tickets/TicketDetailView.vue')
 const CreateTicketView = () => import('@/views/tickets/CreateTicketView.vue')
 const MyTicketsView = () => import('@/views/tickets/MyTicketsView.vue')
+const AssignedTicketsView = () => import('@/views/tickets/AssignedTicketsView.vue')
 const KnowledgeListView = () => import('@/views/knowledge/KnowledgeListView.vue')
 const ArticleDetailView = () => import('@/views/knowledge/ArticleDetailView.vue')
 const FAQView = () => import('@/views/knowledge/FAQView.vue')
@@ -64,6 +65,12 @@ const routes: RouteRecordRaw[] = [
         name: 'MyTickets',
         component: MyTicketsView,
         meta: { title: 'My Tickets' }
+      },
+      {
+        path: 'assigned-tickets',
+        name: 'AssignedTickets',
+        component: AssignedTicketsView,
+        meta: { title: 'Assigned Tickets', roles: ['support_staff', 'manager', 'admin'] }
       },
       {
         path: 'knowledge',

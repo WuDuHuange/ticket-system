@@ -59,6 +59,7 @@ export default {
     dashboard: 'Dashboard',
     tickets: 'Tickets',
     myTickets: 'My Tickets',
+    assignedTickets: 'Assigned to Me',
     allTickets: 'All Tickets',
     createTicket: 'Create Ticket',
     submitTicket: 'Submit Ticket',
@@ -157,6 +158,8 @@ export default {
   tickets: {
     title: 'Tickets',
     myTickets: 'My Tickets',
+    assignedToMe: 'Assigned to Me',
+    noAssignedTickets: 'No tickets assigned to you',
     allTickets: 'All Tickets',
     createTicket: 'Create Ticket',
     submitTicket: 'Submit a New Ticket',
@@ -207,6 +210,9 @@ export default {
     descriptionPlaceholder: 'Please describe your issue in detail. Include any error messages, steps to reproduce, and what you have already tried.',
     submitSuccess: 'Ticket submitted successfully',
     assignToMe: 'Assign to Me',
+    selectAssignee: 'Select assignee',
+    selectTeam: 'Select team',
+    selectAssigneeOrTeam: 'Please select an assignee or a team',
     markResolved: 'Mark Resolved',
     closeTicket: 'Close Ticket',
     slaOnTrack: 'On track',
@@ -482,5 +488,7 @@ export default {
     backHome: 'Back to Home',
     serverError: 'Server Error',
     serverErrorDesc: 'Something went wrong on our end.'
+    ,
+    notAuthenticated: 'You are not authenticated'
   }
 }

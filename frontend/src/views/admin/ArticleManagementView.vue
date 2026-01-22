@@ -219,6 +219,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useKnowledgeStore, useUIStore } from '@/stores'
+import { knowledgeApi } from '@/api'
 import { MdEditor } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
@@ -385,10 +386,20 @@ async function deleteArticle(article: KnowledgeArticle) {
       { type: 'warning' }
     )
     
-    ElMessage.success(t('admin.articleDeleted'))
-    await loadArticles()
-  } catch {
-    // User cancelled
+    // Call API to delete article
+    const response = await knowledgeApi.deleteArticle(article.id)
+    if (response.code === 200) {
+      ElMessage.success(t('admin.articleDeleted'))
+      await loadArticles()
+    } else {
+      ElMessage.error(response.message || t('messages.operationFailed'))
+    }
+  } catch (error: any) {
+    // Check if user cancelled or if it's an actual error
+    if (error !== 'cancel' && error?.toString() !== 'cancel') {
+      console.error('Failed to delete article:', error)
+      ElMessage.error(t('messages.operationFailed'))
+    }
   }
 }
 

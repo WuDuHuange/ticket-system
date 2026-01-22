@@ -26,6 +26,11 @@
             <template #title>{{ $t('nav.allTickets') }}</template>
           </el-menu-item>
           
+          <el-menu-item v-if="isStaff" index="/assigned-tickets">
+            <el-icon><Avatar /></el-icon>
+            <template #title>{{ $t('nav.assignedTickets') }}</template>
+          </el-menu-item>
+          
           <el-menu-item index="/my-tickets">
             <el-icon><List /></el-icon>
             <template #title>{{ $t('nav.myTickets') }}</template>
@@ -135,6 +140,7 @@
               placement="bottom-end"
               :width="360"
               trigger="click"
+              @show="onNotificationPanelOpen"
             >
               <template #reference>
                 <el-badge :value="notificationCount" :hidden="notificationCount === 0" class="notification-badge">
@@ -214,10 +220,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useUserStore, useUIStore } from '@/stores'
+import { notificationApi, type Notification as ApiNotification } from '@/api'
 import {
   HomeFilled,
   Tickets,
@@ -238,7 +245,8 @@ import {
   Fold,
   Monitor,
   Folder,
-  EditPen
+  EditPen,
+  Avatar
 } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
@@ -250,20 +258,77 @@ const uiStore = useUIStore()
 
 const searchQuery = ref('')
 
-// Notification data
-interface Notification {
-  id: string
-  type: 'ticket' | 'system' | 'info'
+// Notification data - using API data
+interface LocalNotification {
+  id: number
+  type: string
   message: string
+  title: string
   time: Date
   read: boolean
   link?: string
+  relatedObjectType?: string | null
+  relatedObjectId?: number | null
 }
 
-// Empty initial state - will be populated from API when backend notification system is ready
-const notifications = ref<Notification[]>([])
+const notifications = ref<LocalNotification[]>([])
+const notificationCount = ref(0)
+let notificationPollingTimer: number | null = null
 
-const notificationCount = computed(() => notifications.value.filter(n => !n.read).length)
+// Fetch notifications from API
+async function fetchNotifications() {
+  try {
+    const response = await notificationApi.getNotifications({ page: 1, pageSize: 10 })
+    if (response && response.data && response.data.items) {
+      notifications.value = response.data.items.map((n: ApiNotification) => ({
+        id: n.id,
+        type: getNotificationType(n.type),
+        title: n.title,
+        message: n.message,
+        time: new Date(n.createdAt),
+        read: n.isRead,
+        relatedObjectType: n.relatedObjectType,
+        relatedObjectId: n.relatedObjectId,
+        link: n.relatedObjectType === 'ticket' && n.relatedObjectId 
+          ? `/tickets/${n.relatedObjectId}` 
+          : undefined
+      }))
+    }
+  } catch (error) {
+    console.error('Failed to fetch notifications:', error)
+  }
+}
+
+// Fetch unread count and auto-refresh list when new notifications arrive
+async function fetchUnreadCount() {
+  try {
+    const response = await notificationApi.getUnreadCount()
+    if (response && response.data && typeof response.data.count === 'number') {
+      const newCount = response.data.count
+      // If count increased, refresh the notifications list so new items appear
+      if (newCount > notificationCount.value) {
+        await fetchNotifications()
+      }
+      notificationCount.value = newCount
+    }
+  } catch (error) {
+    console.error('Failed to fetch unread count:', error)
+  }
+}
+
+// Called when user opens the notification popover
+async function onNotificationPanelOpen() {
+  await fetchNotifications()
+  await fetchUnreadCount()
+}
+
+// Map API notification type to local type
+function getNotificationType(apiType: string): string {
+  if (apiType.includes('ticket')) return 'ticket'
+  if (apiType.includes('sla')) return 'system'
+  if (apiType === 'system') return 'system'
+  return 'info'
+}
 
 function getNotificationIcon(type: string) {
   switch (type) {
@@ -286,16 +351,60 @@ function formatNotificationTime(time: Date): string {
   return t('common.daysAgo', { n: days })
 }
 
-function handleNotificationClick(notification: Notification) {
-  notification.read = true
+async function handleNotificationClick(notification: LocalNotification) {
+  if (!notification.read) {
+    try {
+      await notificationApi.markAsRead(notification.id)
+      notification.read = true
+      notificationCount.value = Math.max(0, notificationCount.value - 1)
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error)
+    }
+  }
   if (notification.link) {
     router.push(notification.link)
   }
 }
 
-function markAllRead() {
-  notifications.value.forEach(n => n.read = true)
+async function markAllRead() {
+  try {
+    await notificationApi.markAllAsRead()
+    notifications.value.forEach(n => n.read = true)
+    notificationCount.value = 0
+  } catch (error) {
+    console.error('Failed to mark all notifications as read:', error)
+  }
 }
+
+// Start polling for notifications
+function startNotificationPolling() {
+  fetchNotifications()
+  fetchUnreadCount()
+  
+  // Poll every 30 seconds
+  notificationPollingTimer = window.setInterval(() => {
+    fetchUnreadCount()
+  }, 30000)
+}
+
+// Stop polling
+function stopNotificationPolling() {
+  if (notificationPollingTimer) {
+    clearInterval(notificationPollingTimer)
+    notificationPollingTimer = null
+  }
+}
+
+// Lifecycle hooks
+onMounted(() => {
+  if (userStore.isAuthenticated) {
+    startNotificationPolling()
+  }
+})
+
+onUnmounted(() => {
+  stopNotificationPolling()
+})
 
 // Computed
 const collapsed = computed(() => uiStore.sidebarCollapsed)

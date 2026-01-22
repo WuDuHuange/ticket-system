@@ -59,6 +59,7 @@ export default {
     dashboard: '仪表盘',
     tickets: '工单',
     myTickets: '我的工单',
+    assignedTickets: '指派给我',
     allTickets: '所有工单',
     createTicket: '创建工单',
     submitTicket: '提交工单',
@@ -157,6 +158,8 @@ export default {
   tickets: {
     title: '工单管理',
     myTickets: '我的工单',
+    assignedToMe: '指派给我',
+    noAssignedTickets: '暂无指派给您的工单',
     allTickets: '所有工单',
     createTicket: '创建工单',
     submitTicket: '提交新工单',
@@ -207,6 +210,9 @@ export default {
     descriptionPlaceholder: '请详细描述您遇到的问题，包括错误信息、复现步骤以及您已经尝试过的方法。',
     submitSuccess: '工单提交成功',
     assignToMe: '分配给我',
+    selectAssignee: '选择指派人',
+    selectTeam: '选择团队',
+    selectAssigneeOrTeam: '请先选择指派人或团队',
     markResolved: '标记为已解决',
     closeTicket: '关闭工单',
     slaOnTrack: '正常',
@@ -481,6 +487,7 @@ export default {
     notFoundDesc: '您访问的页面不存在。',
     backHome: '返回首页',
     serverError: '服务器错误',
-    serverErrorDesc: '服务器出现问题，请稍后重试。'
+    serverErrorDesc: '服务器出现问题，请稍后重试。',
+    notAuthenticated: '您尚未登录'
   }
 }

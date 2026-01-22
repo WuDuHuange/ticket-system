@@ -104,16 +104,14 @@ export const ticketApi = {
     return http.get<PaginatedResponse<Ticket>>('/tickets/', { params })
   },
   
-  // Get my tickets (end user) - Backend filters automatically
+  // Get my tickets (end user) - Only tickets created by current user
   getMyTickets(params: { page: number; pageSize: number; status?: string }) {
-    return http.get<PaginatedResponse<Ticket>>('/tickets/', { params })
+    return http.get<PaginatedResponse<Ticket>>('/tickets/', { params: { ...params, my: 'true' } })
   },
   
-  // Get assigned tickets (support staff) - Backend filters automatically or needs param?
-  // Backend TicketListCreateView does NOT seem to filter by assignee for staff, only requester for non-staff.
-  // We might use filter param if supported.
+  // Get assigned tickets (support staff) - Only tickets assigned to current user
   getAssignedTickets(params: { page: number; pageSize: number; status?: string }) {
-    return http.get<PaginatedResponse<Ticket>>('/tickets/', { params })
+    return http.get<PaginatedResponse<Ticket>>('/tickets/', { params: { ...params, assigned: 'true' } })
   },
   
   // Get team tickets
@@ -328,7 +326,7 @@ export const teamApi = {
   
   // Add team member
   addTeamMember(teamId: string, userId: string, role: 'leader' | 'member') {
-    return http.post<void>(`/teams/${teamId}/members/`, { userId, role })
+    return http.post<void>(`/teams/${teamId}/members/`, { userId: parseInt(userId, 10), role })
   },
   
   // Remove team member
@@ -437,5 +435,79 @@ export const systemApi = {
   // Update system settings
   updateSettings(settings: Record<string, unknown>) {
     return http.put<void>('/system/settings', settings)
+  }
+}
+
+// ==================== Notification API ====================
+export interface Notification {
+  id: number
+  type: string
+  title: string
+  message: string
+  relatedObjectType: string | null
+  relatedObjectId: number | null
+  isRead: boolean
+  readAt: string | null
+  createdAt: string
+}
+
+export interface NotificationPreferences {
+  emailTicketCreated: boolean
+  emailTicketAssigned: boolean
+  emailTicketStatusChanged: boolean
+  emailTicketComment: boolean
+  emailSlaWarning: boolean
+  emailSlaBreach: boolean
+  emailSystem: boolean
+  emailMention: boolean
+  inappTicketCreated: boolean
+  inappTicketAssigned: boolean
+  inappTicketStatusChanged: boolean
+  inappTicketComment: boolean
+  inappSlaWarning: boolean
+  inappSlaBreach: boolean
+  inappSystem: boolean
+  inappMention: boolean
+}
+
+export const notificationApi = {
+  // Get notifications
+  getNotifications(params?: { page?: number; pageSize?: number; isRead?: boolean; type?: string }) {
+    return http.get<PaginatedResponse<Notification>>('/notifications/', { params })
+  },
+  
+  // Get unread notification count
+  getUnreadCount() {
+    return http.get<{ count: number }>('/notifications/unread_count/')
+  },
+  
+  // Mark single notification as read
+  markAsRead(id: number) {
+    return http.post<Notification>(`/notifications/${id}/mark_read/`)
+  },
+  
+  // Mark all notifications as read
+  markAllAsRead() {
+    return http.post<{ message: string; count: number }>('/notifications/mark_all_read/')
+  },
+  
+  // Delete notification
+  deleteNotification(id: number) {
+    return http.delete(`/notifications/${id}/`)
+  },
+  
+  // Clear all read notifications
+  clearAllRead() {
+    return http.delete<{ message: string; count: number }>('/notifications/clear_all/')
+  },
+  
+  // Get notification preferences
+  getPreferences() {
+    return http.get<NotificationPreferences>('/notifications/preferences/')
+  },
+  
+  // Update notification preferences
+  updatePreferences(preferences: Partial<NotificationPreferences>) {
+    return http.patch<NotificationPreferences>('/notifications/preferences/', preferences)
   }
 }

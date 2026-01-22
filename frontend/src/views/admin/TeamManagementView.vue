@@ -146,7 +146,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUIStore } from '@/stores'
-import { teamApi } from '@/api'
+import { teamApi, userApi } from '@/api'
 import type { Team } from '@/types'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { formatDate } from '@/utils/helpers'
@@ -233,16 +233,19 @@ async function manageMembers(team: Team) {
   membersLoading.value = true
   
   try {
-    // Load team members
+    // Load team members from team data
     teamMembers.value = team.members || []
     
-    // Load available users (mock data for now)
-    availableUsers.value = [
-      { id: '1', name: 'John Doe' },
-      { id: '2', name: 'Jane Smith' },
-      { id: '3', name: 'Bob Wilson' },
-      { id: '4', name: 'Alice Brown' }
-    ]
+    // Load available users from API
+    const response = await userApi.getUsers({ page: 1, pageSize: 100 })
+    if (response.code === 200 && response.data) {
+      const users = response.data.items || response.data
+      // Filter out users who are already team members and exclude End users
+      const memberIds = teamMembers.value.map((m: any) => String(m.id))
+      availableUsers.value = users
+        .filter((u: any) => !memberIds.includes(String(u.id)) && u.role !== 'end_user')
+        .map((u: any) => ({ id: String(u.id), name: u.name || u.email, role: u.role }))
+    }
   } catch (error) {
     console.error('Failed to load members:', error)
     ElMessage.error(t('messages.loadFailed'))
@@ -251,24 +254,46 @@ async function manageMembers(team: Team) {
   }
 }
 
-function addMember() {
+async function addMember() {
   if (!selectedUserId.value || !selectedTeam.value) return
   
   const user = availableUsers.value.find(u => u.id === selectedUserId.value)
   if (user) {
-    teamMembers.value.push({
-      id: user.id,
-      userName: user.name,
-      role: 'Member'
-    })
-    selectedUserId.value = ''
-    ElMessage.success(t('admin.memberAdded'))
+    try {
+      await teamApi.addTeamMember(selectedTeam.value.id, selectedUserId.value, 'member')
+      teamMembers.value.push({
+        id: user.id,
+        userName: user.name,
+        role: 'Member'
+      })
+      // Remove user from available list
+      availableUsers.value = availableUsers.value.filter(u => u.id !== selectedUserId.value)
+      selectedUserId.value = ''
+      ElMessage.success(t('admin.memberAdded'))
+      // Reload teams to update member count
+      await loadTeams()
+    } catch (error) {
+      console.error('Failed to add member:', error)
+      ElMessage.error(t('messages.operationFailed'))
+    }
   }
 }
 
-function removeMember(member: any) {
-  teamMembers.value = teamMembers.value.filter(m => m.id !== member.id)
-  ElMessage.success(t('admin.memberRemoved'))
+async function removeMember(member: any) {
+  if (!selectedTeam.value) return
+  
+  try {
+    await teamApi.removeTeamMember(selectedTeam.value.id, member.id)
+    teamMembers.value = teamMembers.value.filter(m => m.id !== member.id)
+    // Add user back to available list
+    availableUsers.value.push({ id: member.id, name: member.userName })
+    ElMessage.success(t('admin.memberRemoved'))
+    // Reload teams to update member count
+    await loadTeams()
+  } catch (error) {
+    console.error('Failed to remove member:', error)
+    ElMessage.error(t('messages.operationFailed'))
+  }
 }
 
 async function deleteTeam(team: Team) {
@@ -279,9 +304,21 @@ async function deleteTeam(team: Team) {
       { type: 'warning' }
     )
     
-    ElMessage.success(t('admin.teamDeleted'))
-  } catch {
-    // User cancelled
+    // Call API to delete team
+    const response = await teamApi.deleteTeam(team.id)
+    if (response.code === 200) {
+      ElMessage.success(t('admin.teamDeleted'))
+      // Reload teams list
+      await loadTeams()
+    } else {
+      ElMessage.error(response.message || t('messages.operationFailed'))
+    }
+  } catch (error: any) {
+    // Check if user cancelled or if it's an actual error
+    if (error !== 'cancel' && error?.toString() !== 'cancel') {
+      console.error('Failed to delete team:', error)
+      ElMessage.error(t('messages.operationFailed'))
+    }
   }
 }
 
