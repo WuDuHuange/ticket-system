@@ -78,6 +78,46 @@
         </template>
       </el-dialog>
 
+      <!-- Satisfaction Survey Dialog -->
+      <el-dialog
+        :title="t('tickets.satisfactionSurvey')"
+        v-model="satisfactionDialogVisible"
+        width="500px"
+        :close-on-click-modal="false"
+      >
+        <div class="satisfaction-survey">
+          <p class="survey-description">{{ t('tickets.satisfactionSurveyDesc') }}</p>
+          
+          <div class="rating-section">
+            <label class="rating-label">{{ t('tickets.satisfactionRating') }}</label>
+            <el-rate
+              v-model="satisfactionRating"
+              :texts="ratingTexts"
+              show-text
+              size="large"
+            />
+          </div>
+          
+          <div class="feedback-section">
+            <el-input
+              v-model="satisfactionComment"
+              type="textarea"
+              :rows="4"
+              :placeholder="t('tickets.feedbackPlaceholder')"
+            />
+          </div>
+        </div>
+
+        <template #footer>
+          <div style="text-align: right">
+            <el-button @click="satisfactionDialogVisible = false">{{ t('common.cancel') }}</el-button>
+            <el-button type="primary" :loading="submittingSatisfaction" @click="submitSatisfaction">
+              {{ t('tickets.submitRating') }}
+            </el-button>
+          </div>
+        </template>
+      </el-dialog>
+
       <el-row :gutter="24">
         <!-- Main Content -->
         <el-col :xs="24" :lg="16">
@@ -258,6 +298,38 @@
             
             <el-empty v-if="!ticket.statusHistory?.length" :description="$t('tickets.noHistory')" :image-size="60" />
           </el-card>
+
+          <!-- Satisfaction Rating Card (shown when ticket is closed) -->
+          <el-card v-if="ticket.status === 'closed'" class="satisfaction-card">
+            <template #header>
+              <span>{{ $t('tickets.satisfactionSurvey') }}</span>
+            </template>
+            
+            <!-- Already rated -->
+            <div v-if="ticket.satisfactionRating" class="satisfaction-display">
+              <div class="rating-display">
+                <span class="label">{{ $t('tickets.yourRating') }}:</span>
+                <el-rate :model-value="ticket.satisfactionRating" disabled />
+              </div>
+              <div v-if="ticket.satisfactionComment" class="feedback-display">
+                <span class="label">{{ $t('tickets.yourFeedback') }}:</span>
+                <p class="feedback-text">{{ ticket.satisfactionComment }}</p>
+              </div>
+            </div>
+            
+            <!-- Not rated yet - show button for ticket owner -->
+            <div v-else-if="isTicketOwner" class="satisfaction-prompt">
+              <p>{{ $t('tickets.satisfactionSurveyDesc') }}</p>
+              <el-button type="primary" @click="openSatisfactionDialog">
+                {{ $t('tickets.submitRating') }}
+              </el-button>
+            </div>
+            
+            <!-- Not rated - shown for staff -->
+            <div v-else class="satisfaction-pending">
+              <el-empty :description="$t('tickets.noHistory')" :image-size="40" />
+            </div>
+          </el-card>
         </el-col>
       </el-row>
     </template>
@@ -305,6 +377,10 @@ const ticket = computed(() => ticketStore.currentTicket)
 const isStaff = computed(() => userStore.isStaff)
 const isAdmin = computed(() => userStore.isAdmin)
 const isManager = computed(() => userStore.isManager)
+const isTicketOwner = computed(() => {
+  if (!ticket.value || !userStore.user) return false
+  return String(ticket.value.requesterId) === String(userStore.user.id)
+})
 
 // Assign dialog state
 const assignDialogVisible = ref(false)
@@ -317,6 +393,19 @@ const assigning = ref(false)
 const newComment = ref('')
 const isInternalComment = ref(false)
 const submitting = ref(false)
+
+// Satisfaction survey state
+const satisfactionDialogVisible = ref(false)
+const satisfactionRating = ref(0)
+const satisfactionComment = ref('')
+const submittingSatisfaction = ref(false)
+const ratingTexts = computed(() => [
+  t('common.veryPoor') || 'Very Poor',
+  t('common.poor') || 'Poor', 
+  t('common.average') || 'Average',
+  t('common.good') || 'Good',
+  t('common.excellent') || 'Excellent'
+])
 
 function formatStatus(status: string): string {
   const statusMap: Record<string, string> = {
@@ -515,6 +604,51 @@ async function submitComment() {
     submitting.value = false
   }
 }
+
+// Satisfaction survey methods
+function openSatisfactionDialog() {
+  satisfactionRating.value = 0
+  satisfactionComment.value = ''
+  satisfactionDialogVisible.value = true
+}
+
+async function submitSatisfaction() {
+  if (!ticket.value) return
+  
+  if (satisfactionRating.value === 0) {
+    ElMessage.warning(t('tickets.ratingRequired'))
+    return
+  }
+  
+  submittingSatisfaction.value = true
+  
+  try {
+    const result = await ticketStore.submitSatisfaction(
+      ticket.value.id,
+      satisfactionRating.value,
+      satisfactionComment.value || undefined
+    )
+    
+    if (result.success) {
+      ElMessage.success(t('tickets.feedbackSubmitted'))
+      satisfactionDialogVisible.value = false
+    } else {
+      ElMessage.error(result.message || t('errors.operationFailed'))
+    }
+  } finally {
+    submittingSatisfaction.value = false
+  }
+}
+
+// Auto-show satisfaction survey when ticket is closed by user confirming resolution
+watch(() => ticket.value?.status, (newStatus, oldStatus) => {
+  if (newStatus === 'closed' && oldStatus === 'resolved' && isTicketOwner.value) {
+    // Only show if not already rated
+    if (!ticket.value?.satisfactionRating) {
+      openSatisfactionDialog()
+    }
+  }
+})
 </script>
 
 <style lang="scss" scoped>
@@ -685,6 +819,76 @@ async function submitComment() {
         font-size: 13px;
       }
     }
+  }
+
+  .satisfaction-card {
+    margin-bottom: 24px;
+
+    .satisfaction-display {
+      .rating-display,
+      .feedback-display {
+        margin-bottom: 16px;
+
+        .label {
+          display: block;
+          font-weight: 500;
+          margin-bottom: 8px;
+          color: #606266;
+        }
+      }
+
+      .feedback-text {
+        margin: 0;
+        padding: 12px;
+        background: #f5f7fa;
+        border-radius: 4px;
+        line-height: 1.6;
+        white-space: pre-wrap;
+      }
+    }
+
+    .satisfaction-prompt {
+      text-align: center;
+      padding: 16px 0;
+
+      p {
+        margin: 0 0 16px;
+        color: #666;
+      }
+    }
+
+    .satisfaction-pending {
+      padding: 8px 0;
+    }
+  }
+}
+
+// Satisfaction survey dialog styles
+.satisfaction-survey {
+  .survey-description {
+    margin: 0 0 24px;
+    color: #666;
+    text-align: center;
+  }
+
+  .rating-section {
+    margin-bottom: 24px;
+    text-align: center;
+
+    .rating-label {
+      display: block;
+      margin-bottom: 12px;
+      font-weight: 500;
+      font-size: 16px;
+    }
+
+    :deep(.el-rate) {
+      justify-content: center;
+    }
+  }
+
+  .feedback-section {
+    margin-top: 16px;
   }
 }
 </style>

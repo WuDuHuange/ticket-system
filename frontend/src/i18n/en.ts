@@ -51,7 +51,12 @@ export default {
     daysAgo: '{n} days ago',
     hours: 'hours',
     active: 'Active',
-    inactive: 'Inactive'
+    inactive: 'Inactive',
+    veryPoor: 'Very Poor',
+    poor: 'Poor',
+    average: 'Average',
+    good: 'Good',
+    excellent: 'Excellent'
   },
 
   // Navigation & Menu
@@ -201,6 +206,14 @@ export default {
     ticketNotFound: 'Ticket not found',
     submitRating: 'Submit Rating',
     satisfactionRating: 'How satisfied are you with the resolution?',
+    satisfactionSurvey: 'Satisfaction Survey',
+    satisfactionSurveyDesc: 'Your ticket has been closed. Please take a moment to rate our service.',
+    ratingRequired: 'Please select a rating',
+    feedbackPlaceholder: 'Any additional feedback? (Optional)',
+    feedbackSubmitted: 'Thank you for your feedback!',
+    alreadyRated: 'You have already submitted feedback for this ticket',
+    yourRating: 'Your Rating',
+    yourFeedback: 'Your Feedback',
     noTickets: 'No tickets found',
     filterByStatus: 'Filter by Status',
     filterByPriority: 'Filter by Priority',

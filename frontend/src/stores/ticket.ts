@@ -230,6 +230,25 @@ export const useTicketStore = defineStore('ticket', () => {
     }
   }
 
+  async function submitSatisfaction(ticketId: string, rating: number, comment?: string) {
+    loading.value = true
+    try {
+      const response = await ticketApi.submitFeedback(ticketId, { rating, comment })
+      
+      if (response.code === 200) {
+        // Refresh current ticket to get updated satisfaction data
+        await fetchTicketById(ticketId)
+        return { success: true }
+      }
+      return { success: false, message: response.message }
+    } catch (error) {
+      console.error('Submit satisfaction error:', error)
+      return { success: false, message: 'Failed to submit satisfaction feedback' }
+    } finally {
+      loading.value = false
+    }
+  }
+
   function setFilter(newFilter: Record<string, unknown>) {
     filter.value = newFilter
   }
@@ -262,6 +281,7 @@ export const useTicketStore = defineStore('ticket', () => {
     assignTicketToTeam,
     addComment,
     fetchCategories,
+    submitSatisfaction,
     setFilter,
     clearFilter
   }

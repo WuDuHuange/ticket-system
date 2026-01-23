@@ -51,7 +51,12 @@ export default {
     daysAgo: '{n} 天前',
     hours: '小时',
     active: '启用',
-    inactive: '禁用'
+    inactive: '禁用',
+    veryPoor: '非常不满意',
+    poor: '不满意',
+    average: '一般',
+    good: '满意',
+    excellent: '非常满意'
   },
 
   // Navigation & Menu
@@ -201,6 +206,14 @@ export default {
     ticketNotFound: '工单不存在',
     submitRating: '提交评价',
     satisfactionRating: '您对本次服务满意吗？',
+    satisfactionSurvey: '满意度调查',
+    satisfactionSurveyDesc: '您的工单已关闭，请花一点时间对我们的服务进行评价。',
+    ratingRequired: '请选择评分',
+    feedbackPlaceholder: '还有其他反馈吗？（可选）',
+    feedbackSubmitted: '感谢您的反馈！',
+    alreadyRated: '您已经为此工单提交过反馈',
+    yourRating: '您的评分',
+    yourFeedback: '您的反馈',
     noTickets: '暂无工单',
     filterByStatus: '按状态筛选',
     filterByPriority: '按优先级筛选',
