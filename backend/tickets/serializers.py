@@ -129,7 +129,8 @@ class TicketDetailSerializer(serializers.ModelSerializer):
         return TicketStatusHistorySerializer(qs.order_by("changed_at"), many=True).data
 
 class TicketAssignSerializer(serializers.Serializer):
-    assignee_id = serializers.CharField()
+    # allow assigning to a user or to a team only
+    assignee_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     team_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 class TicketStatusChangeSerializer(serializers.Serializer):

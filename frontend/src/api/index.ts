@@ -150,15 +150,14 @@ export const ticketApi = {
     return http.patch<Ticket>(`/tickets/${id}/update`, { priority })
   },
   
-  // Assign ticket
+  // Assign ticket (send snake_case keys expected by backend)
   assignTicket(id: string, assigneeId: string) {
-    return http.post<Ticket>(`/tickets/${id}/assign`, { assigneeId })
+    return http.post<Ticket>(`/tickets/${id}/assign`, { assignee_id: assigneeId })
   },
-  
-  // Assign ticket to team
+
+  // Assign ticket to team (use same backend assign endpoint and snake_case key)
   assignTicketToTeam(id: string, teamId: string) {
-     // Not sure if supported
-    return http.patch<Ticket>(`/tickets/${id}/assign-team`, { teamId })
+    return http.post<Ticket>(`/tickets/${id}/assign`, { team_id: teamId })
   },
   
   // Add comment

@@ -30,7 +30,7 @@ from .serializers import (
 )
 
 from accounts.permissions import IsStaffMember, IsAdminOrManager
-from accounts.models import User
+from accounts.models import User, Team
 from accounts.response_wrapper import success_response, error_response, APIResponse
 from accounts.pagination import CustomPagination
 from accounts.notifications import (
@@ -259,8 +259,20 @@ class TicketUpdateView(GenericAPIView):
 
         if "assignee_id" in data:
             ticket.assignee_id = data["assignee_id"]
+            # Populate assignee_name from User record when available
+            try:
+                assignee = User.objects.get(id=ticket.assignee_id)
+                ticket.assignee_name = _get_user_display_name(assignee)
+            except User.DoesNotExist:
+                ticket.assignee_name = ""
         if "team_id" in data:
             ticket.team_id = data["team_id"]
+            # Populate team_name from Team model when available
+            try:
+                team = Team.objects.get(id=ticket.team_id)
+                ticket.team_name = team.name
+            except Team.DoesNotExist:
+                ticket.team_name = ""
 
         ticket.updated_at = timezone.now()
         ticket.save()
@@ -281,9 +293,31 @@ class TicketAssignView(GenericAPIView):
         ser.is_valid(raise_exception=True)
         data = ser.validated_data
 
-        assignee_id = data["assignee_id"]
-        ticket.assignee_id = assignee_id
-        ticket.team_id = data.get("team_id")
+        assignee_id = data.get("assignee_id")
+        team_id = data.get("team_id")
+
+        assignee = None
+        if assignee_id:
+            ticket.assignee_id = assignee_id
+            # Try to populate assignee_name from User model
+            try:
+                assignee = User.objects.get(id=assignee_id)
+                ticket.assignee_name = _get_user_display_name(assignee)
+            except User.DoesNotExist:
+                ticket.assignee_name = ""
+        else:
+            # assigning to team only: clear assignee fields
+            ticket.assignee_id = None
+            ticket.assignee_name = ""
+
+        if team_id:
+            ticket.team_id = team_id
+            # Populate team_name from Team model when available
+            try:
+                team = Team.objects.get(id=team_id)
+                ticket.team_name = team.name
+            except Team.DoesNotExist:
+                ticket.team_name = ""
 
         if ticket.status == "new":
             ticket.status = "assigned"
@@ -291,12 +325,12 @@ class TicketAssignView(GenericAPIView):
         ticket.updated_at = timezone.now()
         ticket.save()
 
-        # Send notification to assignee
-        try:
-            assignee = User.objects.get(id=assignee_id)
-            notify_ticket_assigned(ticket, assignee, request.user)
-        except Exception as e:
-            print(f"Notification error: {e}")
+        # Send notification to assignee (if found)
+        if assignee is not None:
+            try:
+                notify_ticket_assigned(ticket, assignee, request.user)
+            except Exception as e:
+                print(f"Notification error: {e}")
 
         out = TicketDetailSerializer(ticket, context={"request": request}).data
         return success_response(out, message='Ticket assigned successfully')

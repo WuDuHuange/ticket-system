@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Ticket, TicketCategory, PaginatedResponse, TicketCreateDTO } from '@/types'
 import { ticketApi } from '@/api'
+import { transformTicketData, snakeToCamelObject } from '@/utils/helpers'
 
 export const useTicketStore = defineStore('ticket', () => {
   // State
@@ -36,8 +37,9 @@ export const useTicketStore = defineStore('ticket', () => {
       const response = await ticketApi.getTickets({ page, pageSize, filter: mergedFilter })
       
       if (response.code === 200 && response.data) {
-        const data = response.data as PaginatedResponse<Ticket>
-        tickets.value = data.items
+        const data = snakeToCamelObject<PaginatedResponse<Record<string, unknown>>>(response.data)
+        // Transform each ticket in the list
+        tickets.value = data.items.map(item => transformTicketData(item) as unknown as Ticket)
         pagination.value = {
           page: data.page,
           pageSize: data.pageSize,
@@ -58,8 +60,9 @@ export const useTicketStore = defineStore('ticket', () => {
       const response = await ticketApi.getMyTickets({ page, pageSize, status })
       
       if (response.code === 200 && response.data) {
-        const data = response.data as PaginatedResponse<Ticket>
-        tickets.value = data.items
+        const data = snakeToCamelObject<PaginatedResponse<Record<string, unknown>>>(response.data)
+        // Transform each ticket in the list
+        tickets.value = data.items.map(item => transformTicketData(item) as unknown as Ticket)
         pagination.value = {
           page: data.page,
           pageSize: data.pageSize,
@@ -80,8 +83,9 @@ export const useTicketStore = defineStore('ticket', () => {
       const response = await ticketApi.getAssignedTickets({ page, pageSize, status })
       
       if (response.code === 200 && response.data) {
-        const data = response.data as PaginatedResponse<Ticket>
-        tickets.value = data.items
+        const data = snakeToCamelObject<PaginatedResponse<Record<string, unknown>>>(response.data)
+        // Transform each ticket in the list
+        tickets.value = data.items.map(item => transformTicketData(item) as unknown as Ticket)
         pagination.value = {
           page: data.page,
           pageSize: data.pageSize,
@@ -102,8 +106,10 @@ export const useTicketStore = defineStore('ticket', () => {
       const response = await ticketApi.getTicketById(id)
       
       if (response.code === 200 && response.data) {
-        currentTicket.value = response.data
-        return response.data
+        // Transform backend snake_case data to frontend camelCase format
+        const transformedData = transformTicketData(response.data as unknown as Record<string, unknown>) as unknown as Ticket
+        currentTicket.value = transformedData
+        return transformedData
       }
       return null
     } catch (error) {
@@ -138,11 +144,13 @@ export const useTicketStore = defineStore('ticket', () => {
       const response = await ticketApi.updateTicketStatus(id, status, comment)
       
       if (response.code === 200 && response.data) {
-        currentTicket.value = response.data
+        // Transform backend snake_case data to frontend camelCase format
+        const transformedData = transformTicketData(response.data as unknown as Record<string, unknown>) as unknown as Ticket
+        currentTicket.value = transformedData
         // Update in list if exists
         const index = tickets.value.findIndex(t => t.id === id)
         if (index !== -1) {
-          tickets.value[index] = response.data
+          tickets.value[index] = transformedData
         }
         return { success: true }
       }
@@ -161,10 +169,12 @@ export const useTicketStore = defineStore('ticket', () => {
       const response = await ticketApi.assignTicket(id, assigneeId)
 
       if (response.code === 200 && response.data) {
-        currentTicket.value = response.data
+        // Transform backend snake_case data to frontend camelCase format
+        const transformedData = transformTicketData(response.data as unknown as Record<string, unknown>) as unknown as Ticket
+        currentTicket.value = transformedData
         const index = tickets.value.findIndex(t => t.id === id)
         if (index !== -1) {
-          tickets.value[index] = response.data
+          tickets.value[index] = transformedData
         }
         return { success: true }
       }
@@ -183,10 +193,12 @@ export const useTicketStore = defineStore('ticket', () => {
       const response = await ticketApi.assignTicketToTeam(id, teamId)
 
       if (response.code === 200 && response.data) {
-        currentTicket.value = response.data
+        // Transform backend snake_case data to frontend camelCase format
+        const transformedData = transformTicketData(response.data as unknown as Record<string, unknown>) as unknown as Ticket
+        currentTicket.value = transformedData
         const index = tickets.value.findIndex(t => t.id === id)
         if (index !== -1) {
-          tickets.value[index] = response.data
+          tickets.value[index] = transformedData
         }
         return { success: true }
       }

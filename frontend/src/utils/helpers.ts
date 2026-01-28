@@ -1,4 +1,56 @@
 /**
+ * Convert snake_case string to camelCase
+ */
+export function snakeToCamel(str: string): string {
+  return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
+}
+
+/**
+ * Deep convert object keys from snake_case to camelCase
+ */
+export function snakeToCamelObject<T>(obj: unknown): T {
+  if (obj === null || obj === undefined) {
+    return obj as T
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => snakeToCamelObject(item)) as T
+  }
+  
+  if (typeof obj === 'object') {
+    const result: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      const camelKey = snakeToCamel(key)
+      result[camelKey] = snakeToCamelObject(value)
+    }
+    return result as T
+  }
+  
+  return obj as T
+}
+
+/**
+ * Transform backend ticket data to frontend Ticket format
+ */
+export function transformTicketData(data: Record<string, unknown>): Record<string, unknown> {
+  const transformed = snakeToCamelObject<Record<string, unknown>>(data)
+  
+  // Transform status history specific fields
+  if (Array.isArray(transformed.statusHistory)) {
+    transformed.statusHistory = transformed.statusHistory.map((history: Record<string, unknown>) => ({
+      ...history,
+      // Map from_status/to_status to previousStatus/newStatus
+      previousStatus: history.fromStatus || history.previousStatus,
+      newStatus: history.toStatus || history.newStatus,
+      // Map changed_by_name to changedBy
+      changedBy: history.changedByName || history.changedBy || 'Unknown'
+    }))
+  }
+  
+  return transformed
+}
+
+/**
  * Debounce function
  */
 export function debounce<T extends (...args: unknown[]) => unknown>(

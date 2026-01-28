@@ -258,7 +258,7 @@
               </el-descriptions-item>
               
               <el-descriptions-item :label="$t('tickets.assignee')">
-                {{ ticket.assigneeName || $t('tickets.unassigned') }}
+                {{ ticket.assigneeName || ticket.teamName || $t('tickets.unassigned') }}
               </el-descriptions-item>
               
               <el-descriptions-item :label="$t('common.created')">
