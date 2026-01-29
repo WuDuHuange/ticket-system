@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google SSO Test Page</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+        .token-display {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin: 10px 0;
+        }
+        .button {
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        .button:hover {
+            background: #357ae8;
+        }
+        .button.success {
+            background: #34a853;
+        }
+        .button.success:hover {
+            background: #2d9248;
+        }
+        .info {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 12px;
+            margin: 15px 0;
+        }
+        .step {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-left: 3px solid #4285f4;
+        }
+        .step-number {
+            display: inline-block;
+            background: #4285f4;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 24px;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        .user-info {
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .user-info p {
+            margin: 5px 0;
+        }
+        #testButton {
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Google SSO Test Page</h1>
+        <p class="subtitle">用于本地调试 SSO 接口的测试工具</p>
+
+        <div class="info">
+            <strong>⚠️ 使用前配置：</strong>
+            <ol style="margin: 10px 0; padding-left: 20px;">
+                <li>将下面的 <code>YOUR_GOOGLE_CLIENT_ID</code> 替换为你的 Google Client ID</li>
+                <li>在 Google Cloud Console 添加授权来源：<code>http://localhost:8000</code></li>
+                <li>确保后端 <code>/api/auth/sso</code> 接口已实现</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h3>步骤 1：Google 登录</h3>
+            <div id="buttonDiv"></div>
+        </div>
+
+        <div class="section" id="tokenSection" style="display: none;">
+            <h3>步骤 2：获取到的 ID Token</h3>
+            <p>这个 token 就是你要发送给后端的 <code>ssoToken</code></p>
+            <div class="token-display" id="tokenDisplay"></div>
+            <button class="button success" onclick="copyToken()">📋 复制 Token</button>
+        </div>
+
+        <div class="section" id="userSection" style="display: none;">
+            <h3>用户信息</h3>
+            <div class="user-info" id="userInfo"></div>
+        </div>
+
+        <div class="section">
+            <h3>步骤 3：测试后端接口</h3>
+            <div class="step">
+                <span class="step-number">1</span>
+                <strong>方式一：使用 Postman/Thunder Client</strong>
+                <pre style="background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 4px;">POST http://localhost:8000/api/auth/sso
+Content-Type: application/json
+
+{
+  "ssoToken": "复制上面的 token"
+}</pre>
+            </div>
+
+            <div class="step">
+                <span class="step-number">2</span>
+                <strong>方式二：直接在此页面测试</strong>
+                <button id="testButton" class="button" onclick="testBackend()" style="display: none;">
+                    🚀 测试后端接口
+                </button>
+            </div>
+        </div>
+
+        <div class="section" id="responseSection" style="display: none;">
+            <h3>后端响应</h3>
+            <div class="token-display" id="responseDisplay"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentToken = '';
+
+        // 替换为你的 Google Client ID
+        const GOOGLE_CLIENT_ID = '804007269318-1f2j32703vjtd6vnkkqkrqcuegodfi6q.apps.googleusercontent.com';
+        const BACKEND_URL = 'http://localhost:8000/api/auth/sso';
+
+        // 初始化 Google Sign-In
+        function initializeGoogleSignIn() {
+            google.accounts.id.initialize({
+                client_id: GOOGLE_CLIENT_ID,
+                callback: handleCredentialResponse
+            });
+
+            google.accounts.id.renderButton(
+                document.getElementById('buttonDiv'),
+                {
+                    theme: 'outline',
+                    size: 'large',
+                    text: 'signin_with',
+                    width: 250
+                }
+            );
+        }
+
+        // 处理 Google 登录响应
+        function handleCredentialResponse(response) {
+            currentToken = response.credential;
+            
+            // 显示 token
+            document.getElementById('tokenSection').style.display = 'block';
+            document.getElementById('tokenDisplay').textContent = currentToken;
+            
+            // 解析 JWT token 显示用户信息
+            const payload = parseJwt(currentToken);
+            displayUserInfo(payload);
+            
+            // 显示测试按钮
+            document.getElementById('testButton').style.display = 'inline-block';
+            
+            console.log('ID Token:', currentToken);
+            console.log('Decoded:', payload);
+        }
+
+        // 解析 JWT token
+        function parseJwt(token) {
+            try {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                return JSON.parse(jsonPayload);
+            } catch (e) {
+                console.error('Failed to parse JWT:', e);
+                return null;
+            }
+        }
+
+        // 显示用户信息
+        function displayUserInfo(payload) {
+            if (!payload) return;
+            
+            const userInfoDiv = document.getElementById('userInfo');
+            userInfoDiv.innerHTML = `
+                <p><strong>Email:</strong> ${payload.email || 'N/A'}</p>
+                <p><strong>Name:</strong> ${payload.name || 'N/A'}</p>
+                <p><strong>Picture:</strong> ${payload.picture ? `<img src="${payload.picture}" style="width: 50px; border-radius: 50%;">` : 'N/A'}</p>
+                <p><strong>Email Verified:</strong> ${payload.email_verified ? '✅' : '❌'}</p>
+            `;
+            document.getElementById('userSection').style.display = 'block';
+        }
+
+        // 复制 token
+        function copyToken() {
+            navigator.clipboard.writeText(currentToken).then(() => {
+                alert('✅ Token 已复制到剪贴板！');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                // 降级方案
+                const textArea = document.createElement('textarea');
+                textArea.value = currentToken;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('✅ Token 已复制到剪贴板！');
+            });
+        }
+
+        // 测试后端接口
+        async function testBackend() {
+            if (!currentToken) {
+                alert('请先登录获取 token');
+                return;
+            }
+
+            const button = document.getElementById('testButton');
+            button.disabled = true;
+            button.textContent = '⏳ 请求中...';
+
+            try {
+                const response = await fetch(BACKEND_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        ssoToken: currentToken
+                    })
+                });
+
+                const data = await response.json();
+                
+                // 显示响应
+                document.getElementById('responseSection').style.display = 'block';
+                document.getElementById('responseDisplay').textContent = JSON.stringify(data, null, 2);
+
+                if (response.ok) {
+                    alert('✅ 后端接口调用成功！');
+                } else {
+                    alert('❌ 后端返回错误：' + (data.message || response.status));
+                }
+            } catch (error) {
+                alert('❌ 请求失败：' + error.message);
+                console.error('Error:', error);
+            } finally {
+                button.disabled = false;
+                button.textContent = '🚀 测试后端接口';
+            }
+        }
+
+        // 页面加载完成后初始化
+        window.onload = function() {
+            // 检查是否配置了 Client ID
+            if (GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID') {
+                alert('⚠️ 请先在代码中替换 GOOGLE_CLIENT_ID！');
+            } else {
+                initializeGoogleSignIn();
+            }
+        };
+    </script>
+</body>
+</html>
